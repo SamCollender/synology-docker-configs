@@ -139,7 +139,7 @@ services:
 
   overseerr:
     container_name: overseerr
-    image: hotio/overseerr
+    image: ghcr.io/hotio/overseerr
     ports:
       - 5055:5055
     environment:
