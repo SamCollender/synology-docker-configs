@@ -1,0 +1,19 @@
+networks:
+  management:
+    name: management
+    driver: bridge
+
+services:
+  portainer:
+    image: portainer/portainer-ee:alpine
+    container_name: portainer
+    hostname: portainer
+    networks:
+      - management
+    ports:
+      - 9443:9443/tcp
+    volumes:
+      - /volume1/docker/appdata/portainer:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /volume1/@docker/volumes:/var/lib/docker/volume
+    restart: always
