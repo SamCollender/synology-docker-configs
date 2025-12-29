@@ -1,0 +1,24 @@
+gluetun:
+    image: qmcgaw/gluetun
+    container_name: gluetun
+    cap_add:
+      - NET_ADMIN
+    environment:
+      - VPN_SERVICE_PROVIDER=${VPN_SERVICE_PROVIDER}
+      - VPN_TYPE=${VPN_TYPE}
+      - OPENVPN_USER=${OPENVPN_USER}
+      - OPENVPN_PASSWORD=${OPENVPN_PASSWORD}
+      - SERVER_COUNTRIES=${SERVER_COUNTRIES}
+      - TZ=Europe/London
+      - HTTP_CONTROL_SERVER_ADDRESS=:8000
+      - HTTP_CONTROL_SERVER_LOG=on
+    ports:
+      - 8088:8088 # QBitTorrent GUI
+      - 6881:6881 # QBitTorrent Torrents
+      - 6881:6881/udp # QBitTorrent Torrents
+      - 8080:8080 # Sabnzbd
+      - 9696:9696 # Prowlarr
+    restart: unless-stopped
+    privileged: true
+    devices:
+      - "/dev/net/tun:/dev/net/tun"
