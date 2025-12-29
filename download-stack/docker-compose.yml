@@ -39,4 +39,20 @@ services:
     restart: unless-stopped
     depends_on:
       - gluetun
-      
+  
+  sabnzbd:
+    image: lscr.io/linuxserver/sabnzbd:latest
+    container_name: sabnzbd
+    network_mode: container:gluetun
+    environment:
+      - PUID=1026
+      - PGID=100
+      - UMASK=022
+      - TZ=Europe/London
+    volumes:
+      - /volume1/docker/appdata/sabnzbd:/config
+      - /volume1/data/media:/mnt/media
+    restart: unless-stopped
+    depends_on:
+      - gluetun
+
