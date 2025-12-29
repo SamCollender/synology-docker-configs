@@ -23,3 +23,20 @@ services:
     privileged: true
     devices:
       - "/dev/net/tun:/dev/net/tun"
+
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbittorrent
+    network_mode: container:gluetun
+    environment:
+      - UMASK=022
+      - TZ=Europe/London
+      - WEBUI_PORT=8088
+      - TORRENTING_PORT=6881
+    volumes:
+      - /volume1/docker/appdata/qbittorrent:/config
+      - /volume1/data/media:/mnt/media
+    restart: unless-stopped
+    depends_on:
+      - gluetun
+      
