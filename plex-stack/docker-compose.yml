@@ -17,6 +17,8 @@ services:
       - UMASK=022
       - TZ=Europe/London
       - VERSION:latest
+    devices:
+      - /dev/dri:/dev/dri # Intel iGPU
     volumes:
       - /volume1/docker/appdata/plex:/config:rw
       - /volume1/data/media:/mnt/media:ro
