@@ -148,7 +148,7 @@ services:
       - UMASK=022
       - TZ=Europe/London
     volumes:
-      - ${DOCKERCONFDIR}/overseerr:/config
+      - /volume1/docker/appdata/overseerr:/config
       - /volume1/data/media:/mnt/media
       - /etc/localtime:/etc/localtime:ro
     restart: unless-stopped
