@@ -136,3 +136,19 @@ services:
       - LOG_HTML=false
       - CAPTCHA_SOLVER=none
     restart: unless-stopped
+
+  overseerr:
+    container_name: overseerr
+    image: hotio/overseerr
+    ports:
+      - 5055:5055
+    environment:
+      - PUID=1026
+      - PGID=100
+      - UMASK=022
+      - TZ=Europe/London
+    volumes:
+      - ${DOCKERCONFDIR}/overseerr:/config
+      - /volume1/data/media:/mnt/media
+      - /etc/localtime:/etc/localtime:ro
+    restart: unless-stopped
