@@ -1,7 +1,15 @@
+networks:
+  internal:
+    name: eth0
+    external: true
+    
 services:
   plex:
     container_name: plex
     image: plexinc/pms-docker:latest
+    networks:
+      internal:
+        ipv4_address: 192.168.0.49
     ports:
       - 32400:32400/tcp
       - 3005:3005 # (for controlling Plex Home Theater via Plex Companion)
