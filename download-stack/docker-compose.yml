@@ -23,6 +23,12 @@ services:
     privileged: true
     devices:
       - "/dev/net/tun:/dev/net/tun"
+    healthcheck:
+      test: /gluetun-entrypoint healthcheck
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
 
   qbittorrent:
     image: lscr.io/linuxserver/qbittorrent:latest
