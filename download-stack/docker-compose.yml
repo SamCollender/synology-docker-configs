@@ -232,7 +232,6 @@ services:
       - TZ=Europe/London
       - WATCHTOWER_SCHEDULE=0 0 4 * * * # 04:00 daily
       - WATCHTOWER_CLEANUP=true # delete the old image after updating
-      - WATCHTOWER_ROLLING_RESTART=true
       - WATCHTOWER_INCLUDE_RESTARTING=true
       - WATCHTOWER_TIMEOUT=60s
       - WATCHTOWER_DISABLE_CONTAINERS=portainer # Portainer is upgraded by hand
