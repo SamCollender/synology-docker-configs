@@ -235,6 +235,9 @@ services:
       - WATCHTOWER_INCLUDE_RESTARTING=true
       - WATCHTOWER_TIMEOUT=60s
       - WATCHTOWER_DISABLE_CONTAINERS=portainer # Portainer is upgraded by hand
+      - WATCHTOWER_NOTIFICATION_URL=/run/secrets/notification-url # file holds the Discord shoutrrr URL
+      - WATCHTOWER_NOTIFICATION_REPORT=true # one summary message per run
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - /volume1/docker/appdata/watchtower/notification-url:/run/secrets/notification-url:ro # secret lives on the NAS, not in git
     restart: always
