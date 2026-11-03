@@ -211,3 +211,31 @@ services:
       interval: 15s
       retries: 3
     restart: unless-stopped
+
+  # Restarts any container labelled autoheal=true when its healthcheck reports unhealthy
+  autoheal:
+    image: willfarrell/autoheal:latest
+    container_name: autoheal
+    environment:
+      - AUTOHEAL_CONTAINER_LABEL=autoheal
+      - AUTOHEAL_INTERVAL=30
+      - AUTOHEAL_START_PERIOD=120
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: always
+
+  # Nightly image updates for every container (replaces Portainer re-pulling every 5 min)
+  watchtower:
+    image: nickfedor/watchtower:latest
+    container_name: watchtower
+    environment:
+      - TZ=Europe/London
+      - WATCHTOWER_SCHEDULE=0 0 4 * * * # 04:00 daily
+      - WATCHTOWER_CLEANUP=true # delete the old image after updating
+      - WATCHTOWER_ROLLING_RESTART=true
+      - WATCHTOWER_INCLUDE_RESTARTING=true
+      - WATCHTOWER_TIMEOUT=60s
+      - WATCHTOWER_DISABLE_CONTAINERS=portainer # Portainer is upgraded by hand
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: always
