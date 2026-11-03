@@ -24,4 +24,6 @@ services:
       - /volume1/data/media:/mnt/media:ro
       - /etc/localtime:/etc/localtime:ro
       - /volume1/docker/plex_transcode:/transcode
+    labels:
+      - autoheal=true
     restart: unless-stopped
