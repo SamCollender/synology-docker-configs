@@ -1,0 +1,18 @@
+services:
+  claude-code:
+    build:
+      context: .
+      args:
+        - PUID=1026
+        - PGID=100
+    image: claude-code-local
+    container_name: claude-code
+    hostname: claude-code
+    environment:
+      - TZ=Europe/London
+    volumes:
+      - /volume1/docker/appdata/claude-code/home:/home/claude # login + settings persist here
+      - /volume1/docker/synology-docker-configs:/workspace # clone of this repo; Claude can edit it
+    restart: unless-stopped
+    # Not exposed to the network; use it with:
+    #   docker exec -it claude-code claude
