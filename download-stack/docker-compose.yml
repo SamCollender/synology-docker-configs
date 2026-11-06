@@ -217,16 +217,60 @@ services:
       retries: 3
     restart: unless-stopped
 
-  # Restarts any container labelled autoheal=true when its healthcheck reports unhealthy
+  # Restarts any container labelled autoheal=true when its healthcheck reports unhealthy,
+  # and posts to Discord when it does. The webhook URL is a file on the NAS (not in git).
   autoheal:
     image: willfarrell/autoheal:latest
     container_name: autoheal
+    entrypoint:
+      - /bin/sh
+      - -c
+      - export WEBHOOK_URL="$$(cat /run/secrets/webhook-url)"; exec /docker-entrypoint autoheal
     environment:
       - AUTOHEAL_CONTAINER_LABEL=autoheal
       - AUTOHEAL_INTERVAL=30
       - AUTOHEAL_START_PERIOD=120
+      - WEBHOOK_JSON_KEY=content
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - /volume1/docker/appdata/autoheal/webhook-url:/run/secrets/webhook-url:ro
+    restart: always
+
+  # Posts to Discord when a container with a restart policy has been stopped for 2+ minutes
+  # (autoheal only handles unhealthy containers, not ones that exited, e.g. exit 128 last time)
+  deadwatch:
+    image: willfarrell/autoheal:latest
+    container_name: deadwatch
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        URL=$$(cat /run/secrets/webhook-url)
+        S="--unix-socket /var/run/docker.sock"
+        STATE=/tmp/alerted
+        MIN_AGE=$${MIN_AGE:-120}
+        touch $$STATE
+        post() { curl -s -m 10 -X POST -H "Content-Type: application/json" -d "{\"content\":\"$$1\"}" "$$URL" > /dev/null; }
+        while true; do
+          curl -s $$S -g 'http://localhost/containers/json?all=true&filters={"status":["exited","dead"]}' | jq -r '.[].Id' | while read -r id; do
+            info=$$(curl -s $$S "http://localhost/containers/$$id/json")
+            pol=$$(echo "$$info" | jq -r '.HostConfig.RestartPolicy.Name')
+            [ "$$pol" = "no" ] && continue
+            age=$$(echo "$$info" | jq -r '(now - ((.State.FinishedAt[0:19] + "Z") | fromdateiso8601)) | floor')
+            [ "$$age" -lt "$$MIN_AGE" ] && continue
+            key="$$id $$(echo "$$info" | jq -r .State.FinishedAt)"
+            grep -qF "$$key" $$STATE && continue
+            echo "$$key" >> $$STATE
+            name=$$(echo "$$info" | jq -r '.Name | ltrimstr("/")')
+            code=$$(echo "$$info" | jq -r .State.ExitCode)
+            err=$$(echo "$$info" | jq -r .State.Error | tr -d '"\\' | cut -c1-200)
+            post "DOWN: $$name has stopped and not come back (exit code $$code, $${age}s ago). $$err"
+          done
+          sleep 60
+        done
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /volume1/docker/appdata/autoheal/webhook-url:/run/secrets/webhook-url:ro
     restart: always
 
   # Nightly image updates for every container (replaces Portainer re-pulling every 5 min)
