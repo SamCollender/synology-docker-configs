@@ -180,8 +180,12 @@ services:
   flaresolverr:
     container_name: flaresolverr
     image: ghcr.io/flaresolverr/flaresolverr:latest
-    ports:
-      - 8191:8191
+    # Shares gluetun's network so Prowlarr (also behind gluetun) can reach it at http://localhost:8191
+    network_mode: service:gluetun
+    depends_on:
+      gluetun:
+        condition: service_healthy
+        restart: true
     environment:
       - PUID=1026
       - PGID=100
