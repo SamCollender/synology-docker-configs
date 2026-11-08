@@ -22,21 +22,4 @@ services:
     labels:
       - autoheal=true
     restart: unless-stopped
-
-  # IPTV proxy: merges your M3U playlist and XMLTV guide and looks like an HDHomeRun tuner to Plex.
-  # Set up at http://192.168.1.150:34400/web/ then add it in Plex: Live TV & DVR > Set up > 192.168.1.150:34400
-  xteve:
-    container_name: xteve
-    image: alturismo/xteve:latest
-    ports:
-      - 34400:34400
-    environment:
-      - TZ=Europe/London
-    volumes:
-      - /volume1/docker/appdata/xteve:/config
-      - /etc/localtime:/etc/localtime:ro
-    tmpfs:
-      - /tmp/xteve # stream buffer, kept in RAM so it does not wear the disks
-    labels:
-      - autoheal=true
-    restart: unless-stopped
+    # xteve (IPTV proxy for Plex) lives in download-stack so it can run behind gluetun's VPN

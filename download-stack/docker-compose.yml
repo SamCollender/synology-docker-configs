@@ -21,6 +21,7 @@ services:
       - 6881:6881/udp # QBitTorrent Torrents
       - 8080:8080 # Sabnzbd
       - 9696:9696 # Prowlarr
+      - 34400:34400 # xTeVe (IPTV proxy for Plex)
     restart: unless-stopped
     labels:
       - autoheal=true
@@ -215,6 +216,29 @@ services:
       timeout: 3s
       interval: 15s
       retries: 3
+    restart: unless-stopped
+
+  # IPTV proxy: merges your M3U playlist and XMLTV guide and looks like an HDHomeRun tuner to Plex.
+  # Runs inside gluetun's network so the IPTV streams go through the VPN (port 34400 is published on gluetun).
+  # Set up at http://192.168.1.150:34400/web/ then add it in Plex: Live TV & DVR > Set up > 192.168.1.150:34400
+  xteve:
+    container_name: xteve
+    image: alturismo/xteve:latest
+    network_mode: service:gluetun
+    depends_on:
+      gluetun:
+        condition: service_healthy
+        restart: true
+    environment:
+      - TZ=Europe/London
+    volumes:
+      - /volume1/docker/appdata/xteve:/config
+      - /etc/localtime:/etc/localtime:ro
+    tmpfs:
+      - /tmp/xteve # stream buffer, kept in RAM so it does not wear the disks
+    labels:
+      - autoheal=true
+      - com.centurylinklabs.watchtower.depends-on=gluetun
     restart: unless-stopped
 
   # Restarts any container labelled autoheal=true when its healthcheck reports unhealthy,
