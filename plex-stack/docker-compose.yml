@@ -19,7 +19,8 @@ services:
       - /volume1/data/media:/mnt/media:ro
       - /etc/localtime:/etc/localtime:ro
       - /volume1/docker/plex_transcode:/transcode
+      - /volume1/data/media/recordings:/recordings:rw # Live TV / DVR recordings (the rest of /mnt/media stays read-only)
     labels:
       - autoheal=true
     restart: unless-stopped
-    # xteve (IPTV proxy for Plex) lives in download-stack so it can run behind gluetun's VPN
+    # threadfin (IPTV proxy for Plex) lives in download-stack so it can run behind gluetun's VPN
