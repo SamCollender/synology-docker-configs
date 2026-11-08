@@ -242,6 +242,162 @@ services:
       - com.centurylinklabs.watchtower.depends-on=gluetun
     restart: unless-stopped
 
+  # Trims the IPTV provider's huge playlist and guide (139,000 streams) down to the channel groups listed in
+  # /volume1/docker/appdata/threadfin-trim/groups.txt, fetched through the VPN, and serves the small files to
+  # Threadfin at http://127.0.0.1:8099/trimmed.m3u and /trimmed.xml (inside gluetun's network only).
+  # The provider links live in threadfin-trim/sources.env on the NAS, not in git.
+  iptvtrim:
+    container_name: iptvtrim
+    image: python:3.12-alpine
+    network_mode: service:gluetun
+    depends_on:
+      gluetun:
+        condition: service_healthy
+        restart: true
+    mem_limit: 400m
+    entrypoint:
+      - python
+      - -u
+      - -c
+      - |
+        import functools, http.server, os, re, sys, threading, time, urllib.request, xml.etree.ElementTree as ET
+
+        OUT = '/out'
+        CFG = '/cfg'
+        INTERVAL = int(os.environ.get('INTERVAL', '43200'))
+        PORT = int(os.environ.get('PORT', '8099'))
+
+
+        class Quiet(http.server.SimpleHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+
+        def serve():
+            handler = functools.partial(Quiet, directory=OUT)
+            http.server.ThreadingHTTPServer(('127.0.0.1', PORT), handler).serve_forever()
+
+
+        if not os.environ.get('NOSERVE'):
+            threading.Thread(target=serve, daemon=True).start()
+
+
+        def log(msg):
+            print(time.strftime('%Y-%m-%d %H:%M:%S'), msg, flush=True)
+
+
+        def load_env(path):
+            env = {}
+            for line in open(path):
+                line = line.strip()
+                if line and '=' in line and not line.startswith('#'):
+                    k, v = line.split('=', 1)
+                    env[k] = v
+            return env
+
+
+        def fetch(url, dest):
+            req = urllib.request.Request(url, headers={'User-Agent': 'Lavf/60.16.100'})
+            with urllib.request.urlopen(req, timeout=180) as r, open(dest, 'wb') as f:
+                while True:
+                    chunk = r.read(1 << 20)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+
+
+        def trim_m3u(src, dst, groups):
+            ids, kept, total = set(), 0, 0
+            with open(src, encoding='utf-8', errors='replace') as f, open(dst, 'w', encoding='utf-8') as out:
+                out.write('#EXTM3U\n')
+                info = None
+                for line in f:
+                    line = line.rstrip('\r\n')
+                    if line.startswith('#EXTINF'):
+                        info = line
+                    elif line and not line.startswith('#') and info is not None:
+                        total += 1
+                        m = re.search(r'group-title="([^"]*)"', info)
+                        if m and m.group(1) in groups:
+                            out.write(info + '\n' + line + '\n')
+                            kept += 1
+                            t = re.search(r'tvg-id="([^"]*)"', info)
+                            if t and t.group(1):
+                                ids.add(t.group(1))
+                        info = None
+            return ids, kept, total
+
+
+        def trim_xml(src, dst, ids):
+            chans = progs = 0
+            root = None
+            with open(dst, 'w', encoding='utf-8') as out:
+                out.write('<?xml version="1.0" encoding="UTF-8"?>\n<tv generator-info-name="iptv-trim">\n')
+                for event, elem in ET.iterparse(src, events=('start', 'end')):
+                    if event == 'start':
+                        if root is None:
+                            root = elem
+                        continue
+                    if elem.tag == 'channel':
+                        if elem.get('id') in ids:
+                            out.write(ET.tostring(elem, encoding='unicode'))
+                            chans += 1
+                        elem.clear()
+                        root.clear()
+                    elif elem.tag == 'programme':
+                        if elem.get('channel') in ids:
+                            out.write(ET.tostring(elem, encoding='unicode'))
+                            progs += 1
+                        elem.clear()
+                        root.clear()
+                out.write('</tv>\n')
+            return chans, progs
+
+
+        def run_once():
+            env = load_env(CFG + '/sources.env')
+            groups = {g.strip() for g in open(CFG + '/groups.txt') if g.strip()}
+            log('groups kept: %d' % len(groups))
+            fetch(env['M3U_URL'], OUT + '/full.m3u.tmp')
+            ids, kept, total = trim_m3u(OUT + '/full.m3u.tmp', OUT + '/trimmed.m3u.tmp', groups)
+            os.remove(OUT + '/full.m3u.tmp')
+            if kept == 0:
+                log('no channels matched the groups, keeping previous files')
+                os.remove(OUT + '/trimmed.m3u.tmp')
+                return
+            log('playlist: kept %d of %d streams (%d guide ids)' % (kept, total, len(ids)))
+            fetch(env['XMLTV_URL'], OUT + '/full.xml.tmp')
+            chans, progs = trim_xml(OUT + '/full.xml.tmp', OUT + '/trimmed.xml.tmp', ids)
+            os.remove(OUT + '/full.xml.tmp')
+            log('guide: kept %d channels, %d programmes' % (chans, progs))
+            os.replace(OUT + '/trimmed.m3u.tmp', OUT + '/trimmed.m3u')
+            os.replace(OUT + '/trimmed.xml.tmp', OUT + '/trimmed.xml')
+            log('wrote %s (%d bytes) and %s (%d bytes)' % (
+                OUT + '/trimmed.m3u', os.path.getsize(OUT + '/trimmed.m3u'),
+                OUT + '/trimmed.xml', os.path.getsize(OUT + '/trimmed.xml')))
+
+
+        while True:
+            try:
+                run_once()
+            except Exception as e:
+                log('ERROR: %s: %s' % (type(e).__name__, str(e)[:200]))
+                for p in ('full.m3u.tmp', 'full.xml.tmp', 'trimmed.m3u.tmp', 'trimmed.xml.tmp'):
+                    try:
+                        os.remove(OUT + '/' + p)
+                    except OSError:
+                        pass
+            if os.environ.get('ONCE'):
+                break
+            time.sleep(INTERVAL)
+    volumes:
+      - /volume1/docker/appdata/threadfin-trim/sources.env:/cfg/sources.env:ro
+      - /volume1/docker/appdata/threadfin-trim/groups.txt:/cfg/groups.txt:ro
+      - /volume1/docker/appdata/threadfin-trim/out:/out
+    labels:
+      - com.centurylinklabs.watchtower.depends-on=gluetun
+    restart: unless-stopped
+
   # Restarts any container labelled autoheal=true when its healthcheck reports unhealthy,
   # and posts to Discord when it does. The webhook URL is a file on the NAS (not in git).
   autoheal:
