@@ -21,7 +21,7 @@ services:
       - 6881:6881/udp # QBitTorrent Torrents
       - 8080:8080 # Sabnzbd
       - 9696:9696 # Prowlarr
-      - 34400:34400 # xTeVe (IPTV proxy for Plex)
+      - 34400:34400 # Threadfin (IPTV proxy for Plex)
     restart: unless-stopped
     labels:
       - autoheal=true
@@ -218,12 +218,13 @@ services:
       retries: 3
     restart: unless-stopped
 
-  # IPTV proxy: merges your M3U playlist and XMLTV guide and looks like an HDHomeRun tuner to Plex.
-  # Runs inside gluetun's network so the IPTV streams go through the VPN (port 34400 is published on gluetun).
+  # IPTV proxy (maintained xTeVe fork with playlist filtering): merges your M3U playlist and XMLTV guide
+  # and looks like an HDHomeRun tuner to Plex. Runs inside gluetun's network so IPTV streams go through
+  # the VPN (port 34400 is published on gluetun).
   # Set up at http://192.168.1.150:34400/web/ then add it in Plex: Live TV & DVR > Set up > 192.168.1.150:34400
-  xteve:
-    container_name: xteve
-    image: alturismo/xteve:latest
+  threadfin:
+    container_name: threadfin
+    image: fyb3roptik/threadfin:latest
     network_mode: service:gluetun
     depends_on:
       gluetun:
@@ -232,10 +233,10 @@ services:
     environment:
       - TZ=Europe/London
     volumes:
-      - /volume1/docker/appdata/xteve:/config
+      - /volume1/docker/appdata/threadfin:/home/threadfin/conf
       - /etc/localtime:/etc/localtime:ro
     tmpfs:
-      - /tmp/xteve # stream buffer, kept in RAM so it does not wear the disks
+      - /tmp/threadfin # stream buffer, kept in RAM so it does not wear the disks
     labels:
       - autoheal=true
       - com.centurylinklabs.watchtower.depends-on=gluetun
