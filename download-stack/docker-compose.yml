@@ -273,6 +273,61 @@ services:
       - /volume1/docker/appdata/autoheal/webhook-url:/run/secrets/webhook-url:ro
     restart: always
 
+  # Moves non-English-original titles onto their "(foreign ok)" quality profile every 30 min
+  # (and searches if they have no file), so foreign requests via Seerr are not blocked by the dub-tag rule
+  profilesync:
+    image: willfarrell/autoheal:latest
+    container_name: profilesync
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        URL=$$(cat /run/secrets/webhook-url)
+        INTERVAL=$${INTERVAL:-1800}
+        post() { [ -n "$$DRY" ] && { echo "$$1"; return; }; curl -s -m 10 -X POST -H "Content-Type: application/json" -d "{\"content\":\"$$1\"}" "$$URL" > /dev/null; }
+        sync() {
+          app=$$1; port=$$2; kind=$$3; idkey=$$4
+          KEY=$$(grep -o '<ApiKey>[^<]*' /cfg/$$app.xml | cut -d'>' -f2)
+          H="X-Api-Key: $$KEY"; U="http://$$app:$$port/api/v3"
+          profiles=$$(curl -s -m 60 -H "$$H" $$U/qualityprofile)
+          curl -s -m 180 -H "$$H" $$U/$$kind | jq -c --argjson p "$$profiles" '
+            ($$p | map({(.name): .id}) | add) as $$ids
+            | [ .[] | select((.originalLanguage.name // "English") != "English")
+                | . as $$i | ($$p | map(select(.id == $$i.qualityProfileId)) | .[0].name) as $$pn
+                | select($$pn != null and ($$pn | endswith(" (foreign ok)") | not))
+                | select($$ids[$$pn + " (foreign ok)"] != null)
+                | {id: .id, title: .title, twin: $$ids[$$pn + " (foreign ok)"], hasFile: ((.hasFile // false) or ((.statistics.episodeFileCount // 0) > 0))} ]' > /tmp/todo_$$app.json
+          n=$$(jq 'length' /tmp/todo_$$app.json)
+          [ "$$n" = "0" ] && return
+          names=$$(jq -r 'map(.title) | join(", ")' /tmp/todo_$$app.json | cut -c1-300)
+          if [ -z "$$DRY" ]; then
+            jq -c 'group_by(.twin)[] | {ids: map(.id), twin: .[0].twin}' /tmp/todo_$$app.json | while read -r g; do
+              body=$$(echo "$$g" | jq -c --arg k "$$idkey" '{($$k): .ids, qualityProfileId: .twin}')
+              curl -s -m 60 -o /dev/null -H "$$H" -H "Content-Type: application/json" -X PUT "$$U/$$kind/editor" -d "$$body"
+            done
+            if [ "$$kind" = "movie" ]; then
+              ids=$$(jq -c '[.[] | select(.hasFile | not) | .id]' /tmp/todo_$$app.json)
+              [ "$$ids" != "[]" ] && curl -s -m 60 -o /dev/null -H "$$H" -H "Content-Type: application/json" -X POST "$$U/command" -d "{\"name\":\"MoviesSearch\",\"movieIds\":$$ids}"
+            else
+              for id in $$(jq -r '.[] | select(.hasFile | not) | .id' /tmp/todo_$$app.json); do
+                curl -s -m 60 -o /dev/null -H "$$H" -H "Content-Type: application/json" -X POST "$$U/command" -d "{\"name\":\"SeriesSearch\",\"seriesId\":$$id}"
+              done
+            fi
+          fi
+          post "Profile sync ($$app): moved $$n foreign-language title(s) to the 'foreign ok' profile: $$names"
+        }
+        while true; do
+          sync radarr 7878 movie movieIds
+          sync sonarr 8989 series seriesIds
+          [ -n "$$ONCE" ] && exit 0
+          sleep "$$INTERVAL"
+        done
+    volumes:
+      - /volume1/docker/appdata/radarr/config.xml:/cfg/radarr.xml:ro
+      - /volume1/docker/appdata/sonarr/config.xml:/cfg/sonarr.xml:ro
+      - /volume1/docker/appdata/autoheal/webhook-url:/run/secrets/webhook-url:ro
+    restart: always
+
   # Nightly image updates for every container (replaces Portainer re-pulling every 5 min)
   watchtower:
     image: nickfedor/watchtower:latest
