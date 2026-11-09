@@ -198,6 +198,15 @@ services:
       - LOG_LEVEL=info
       - LOG_HTML=false
       - CAPTCHA_SOLVER=none
+    labels:
+      - autoheal=true
+      - com.centurylinklabs.watchtower.depends-on=gluetun
+    healthcheck: # fails when gluetun restarts and this container is left with a dead network, so autoheal restarts it
+      test: curl -fsS -m 5 -o /dev/null http://127.0.0.1:8191/ || exit 1
+      interval: 60s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
     restart: unless-stopped
 
   seerr:
@@ -242,6 +251,12 @@ services:
     labels:
       - autoheal=true
       - com.centurylinklabs.watchtower.depends-on=gluetun
+    healthcheck: # same reason as flaresolverr: detect a dead network after gluetun restarts
+      test: curl -fsS -m 5 -o /dev/null http://$$(hostname -i | cut -d' ' -f1):34400/discover.json || exit 1 # threadfin listens on its container address, not 127.0.0.1
+      interval: 60s
+      timeout: 10s
+      start_period: 90s
+      retries: 3
     restart: unless-stopped
 
   # Trims the IPTV provider's huge playlist and guide (139,000 streams) down to the channel groups listed in
@@ -397,7 +412,14 @@ services:
       - /volume1/docker/appdata/threadfin-trim/groups.txt:/cfg/groups.txt:ro
       - /volume1/docker/appdata/threadfin-trim/out:/out
     labels:
+      - autoheal=true
       - com.centurylinklabs.watchtower.depends-on=gluetun
+    healthcheck: # same reason as flaresolverr: detect a dead network after gluetun restarts
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8099/trimmed.m3u', timeout=5)"]
+      interval: 60s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
     restart: unless-stopped
 
   # Restarts any container labelled autoheal=true when its healthcheck reports unhealthy,
