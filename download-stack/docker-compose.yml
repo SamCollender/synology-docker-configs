@@ -10,6 +10,9 @@ services:
       - OPENVPN_USER=${OPENVPN_USER}
       - OPENVPN_PASSWORD=${OPENVPN_PASSWORD}
       - SERVER_COUNTRIES=${SERVER_COUNTRIES}
+      # The IPTV provider blocks some of Privado's Netherlands addresses (403). The 91.148.236.x servers worked,
+      # a random pick landed on 91.148.247.x and was blocked, so stay on these four standard servers.
+      - SERVER_HOSTNAMES=ams-030.vpn.privado.io,ams-031.vpn.privado.io,ams-032.vpn.privado.io,ams-033.vpn.privado.io
       - TZ=Europe/London
       - HTTP_CONTROL_SERVER_ADDRESS=:8000
       - HTTP_CONTROL_SERVER_LOG=on
