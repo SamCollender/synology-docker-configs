@@ -38,7 +38,7 @@ services:
       - /bin/sh
       - -c
       - |
-        if [ -f /run/secrets/authkey ]; then export TS_AUTHKEY="$$(cat /run/secrets/authkey)"; fi
+        if [ -f /run/secrets/authkey ]; then export TS_AUTHKEY="$$(tr -d '\r\n ' < /run/secrets/authkey)"; fi # strip Windows line endings, which make Tailscale reject the key
         exec /usr/local/bin/containerboot
     environment:
       - TS_USERSPACE=true
