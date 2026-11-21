@@ -24,3 +24,28 @@ services:
       - autoheal=true
     restart: unless-stopped
     # threadfin (IPTV proxy for Plex) lives in download-stack so it can run behind gluetun's VPN
+
+  # Private remote access: puts the NAS on your Tailscale network, so with Tailscale switched on your phone can
+  # open Seerr at http://samnas:5055 (or the NAS's 100.x address) from anywhere. Nothing is exposed to the internet.
+  # Userspace mode (no tun device / extra privileges). The one-time join key is read from
+  # /volume1/docker/appdata/tailscale-nas/secrets/authkey (not in git) and is not needed after the first start.
+  tailscale:
+    image: tailscale/tailscale:latest
+    container_name: tailscale
+    hostname: samnas
+    network_mode: host
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        if [ -f /run/secrets/authkey ]; then export TS_AUTHKEY="$$(cat /run/secrets/authkey)"; fi
+        exec /usr/local/bin/containerboot
+    environment:
+      - TS_USERSPACE=true
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_HOSTNAME=samnas
+      - TS_ACCEPT_DNS=false
+    volumes:
+      - /volume1/docker/appdata/tailscale-nas:/var/lib/tailscale
+      - /volume1/docker/appdata/tailscale-nas/secrets:/run/secrets:ro
+    restart: unless-stopped
